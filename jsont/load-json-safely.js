@@ -1,14 +1,14 @@
 // ==UserScript==
 // @name         JSON Online Editor - Safe JSON Paste
 // @namespace    http://tampermonkey.net/
-// @version      1.1
+// @version      1.2
 // @description  Safely handle JSON paste with big numbers in JSON Online Editor
 // @author       mopip77
 // @match        https://www.jsont.run
 // @grant        none
 // @run-at       document-start
-// @updateURL    https://raw.githubusercontent.com/mopip77/tampermonkey-scripts/main/jsont/load-json-safely.js
-// @downloadURL  https://raw.githubusercontent.com/mopip77/tampermonkey-scripts/main/jsont/load-json-safely.js
+// @updateURL    https://raw.githubusercontent.com/Mopip77/tampermonkey-scripts/main/jsont/load-json-safely.js
+// @downloadURL  https://raw.githubusercontent.com/Mopip77/tampermonkey-scripts/main/jsont/load-json-safely.js
 // ==/UserScript==
 
 (function () {
