@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         JSON Online Editor - Safe JSON Paste
 // @namespace    http://tampermonkey.net/
-// @version      1.0
+// @version      1.1
 // @description  Safely handle JSON paste with big numbers in JSON Online Editor
 // @author       mopip77
 // @match        https://www.jsont.run
@@ -215,15 +215,6 @@
   window.addEventListener("paste", async function (event) {
     const clipboardData = event.clipboardData || window.clipboardData;
     const pastedData = clipboardData.getData("text");
-    
-    if (event.target?.tagName === 'TEXTAREA') {
-        // 如果是 textarea 说明是文本视图，使用 monaco-editor
-        // 这里不处理，直接返回
-        console.log("Textarea detected, no action taken.");
-        return;
-    }
-
-    console.log("Pasted data:", event);
 
     try {
       const json = JSON.parse(pastedData);
@@ -234,10 +225,8 @@
           "JSON 中存在 big number，可能导致精度损失，是否转化成字符串后解析？"
         );
         if (confirmed) {
-          console.log("Converting big numbers to strings...");
           const convertedJsonString = convertBigNumbersInJsonString(pastedData);
           const convertedJson = JSON.parse(convertedJsonString);
-          console.log("Converted JSON:", convertedJson);
           document.execCommand(
             "insertText",
             false,
