@@ -7,6 +7,8 @@
 // @match        https://gemini.google.com/*
 // @grant        none
 // @run-at       document-end
+// @updateURL    https://raw.githubusercontent.com/Mopip77/tampermonkey-scripts/main/gemini/prompt_injector.user.js
+// @downloadURL  https://raw.githubusercontent.com/Mopip77/tampermonkey-scripts/main/gemini/prompt_injector.user.js
 // ==/UserScript==
 
 (function () {
