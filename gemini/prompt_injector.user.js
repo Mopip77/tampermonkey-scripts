@@ -1,11 +1,13 @@
 // ==UserScript==
 // @name         Gemini Prompt Injector
 // @namespace    http://tampermonkey.net/
-// @version      0.2
+// @version      0.3
 // @description  Injects prompt from URL parameters into Gemini input field
 // @author       mopip77
 // @match        https://gemini.google.com/*
-// @grant        none
+// @grant        GM_getValue
+// @grant        GM_setValue
+// @grant        GM_registerMenuCommand
 // @run-at       document-end
 // @updateURL    https://raw.githubusercontent.com/Mopip77/tampermonkey-scripts/main/gemini/prompt_injector.user.js
 // @downloadURL  https://raw.githubusercontent.com/Mopip77/tampermonkey-scripts/main/gemini/prompt_injector.user.js
@@ -14,7 +16,30 @@
 (function () {
     'use strict';
 
-    const animate_duration_ms = 5000;
+    const ANIMATION_DURATION_KEY = 'animation_duration_ms';
+    const DEFAULT_DURATION = 5000;
+
+    function getAnimationDuration() {
+        return GM_getValue(ANIMATION_DURATION_KEY, DEFAULT_DURATION);
+    }
+
+    GM_registerMenuCommand('配置动画时长', () => {
+        const current = getAnimationDuration();
+        const input = prompt(`请输入动画时长（毫秒）（当前：${current}）：`, current);
+        if (input !== null) {
+            const val = parseInt(input, 10);
+            if (!isNaN(val) && val > 0) {
+                GM_setValue(ANIMATION_DURATION_KEY, val);
+                if (confirm(`时长已设置为 ${val} 毫秒。是否重新加载页面以应用更改？`)) {
+                    window.location.reload();
+                }
+            } else {
+                alert('输入无效。请输入一个正整数。');
+            }
+        }
+    });
+
+    const animate_duration_ms = getAnimationDuration();
 
     function getQueryParam(param) {
         const urlParams = new URLSearchParams(window.location.search);
