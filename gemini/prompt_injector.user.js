@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gemini Prompt Injector
 // @namespace    http://tampermonkey.net/
-// @version      0.4
+// @version      0.5
 // @description  Injects prompt from URL parameters into Gemini input field
 // @author       mopip77
 // @match        https://gemini.google.com/app?*
@@ -132,6 +132,12 @@
                 }
                 
                 const targetElement = container || inputDiv;
+
+                if (targetElement.dataset.geminiInjected === 'true') {
+                    console.log('Gemini Prompt Injector: Already injected, skipping.');
+                    return;
+                }
+                targetElement.dataset.geminiInjected = 'true';
 
                 // Apply the running lights effect
                 targetElement.classList.add('gemini-injector-active');
