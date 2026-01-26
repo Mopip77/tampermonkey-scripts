@@ -1,10 +1,10 @@
 // ==UserScript==
 // @name         Gemini Prompt Injector
 // @namespace    http://tampermonkey.net/
-// @version      0.3
+// @version      0.4
 // @description  Injects prompt from URL parameters into Gemini input field
 // @author       mopip77
-// @match        https://gemini.google.com/*
+// @match        https://gemini.google.com/app?*
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_registerMenuCommand
