@@ -1,13 +1,16 @@
 // ==UserScript==
 // @name         Gemini Prompt Injector
 // @namespace    http://tampermonkey.net/
-// @version      0.5
-// @description  Injects prompt from URL parameters into Gemini input field
+// @version      0.8
+// @description  Injects prompt from URL parameters or local HTTP server into Gemini input field
 // @author       mopip77
 // @match        https://gemini.google.com/app?*
+// @match        https://gemini.google.com/app#*
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_registerMenuCommand
+// @grant        GM_xmlhttpRequest
+// @connect      127.0.0.1
 // @run-at       document-end
 // @updateURL    https://raw.githubusercontent.com/Mopip77/tampermonkey-scripts/main/gemini/prompt_injector.user.js
 // @downloadURL  https://raw.githubusercontent.com/Mopip77/tampermonkey-scripts/main/gemini/prompt_injector.user.js
@@ -46,9 +49,44 @@
         return urlParams.get(param);
     }
 
+    function getHashParam(param) {
+        const hash = window.location.hash;
+        if (!hash || hash.length <= 1) return null;
+        const hashParams = new URLSearchParams(hash.substring(1));
+        return hashParams.get(param);
+    }
+
+    function getParam(param) {
+        return getQueryParam(param) || getHashParam(param);
+    }
+
+    const DEFAULT_PROMPT_PORT = 18232;
+
+    function fetchFromLocalServer(port) {
+        return new Promise((resolve, reject) => {
+            GM_xmlhttpRequest({
+                method: 'GET',
+                url: `http://127.0.0.1:${port}/`,
+                timeout: 3000,
+                onload: (response) => {
+                    if (response.responseText) {
+                        resolve(response.responseText);
+                    } else {
+                        reject(new Error('Empty response from local server'));
+                    }
+                },
+                onerror: () => reject(new Error('Cannot connect to local prompt server')),
+                ontimeout: () => reject(new Error('Local prompt server timed out'))
+            });
+        });
+    }
+
     function injectPrompt() {
-        const promptText = getQueryParam('prompt') || getQueryParam('q') || getQueryParam('text');
-        if (!promptText) return;
+        const portParam = getParam('port');
+        const useServer = portParam !== null;
+        const promptText = useServer ? null : (getParam('prompt') || getParam('q') || getParam('text'));
+        if (!promptText && !useServer) return;
+        const port = useServer ? (parseInt(portParam, 10) || DEFAULT_PROMPT_PORT) : 0;
 
         // Selector for the Gemini input area (contenteditable div)
         // Note: Class names might change, so we try a few common patterns or generic attributes
@@ -109,58 +147,61 @@
             document.head.appendChild(style);
         }
 
-        waitForElement(inputSelector).then(inputDiv => {
+        waitForElement(inputSelector).then(async inputDiv => {
             // Need to wait a bit for the editor to be fully ready/interactive
-            setTimeout(() => {
-                inputDiv.focus();
+            await new Promise(r => setTimeout(r, 1000));
 
-                // Find the main container (the rounded white box)
-                // We look for 'input-area-v2' specifically as identified, or fallback to walking up
-                let container = inputDiv.closest('input-area-v2');
-                
-                if (!container) {
-                    // Fallback heuristic: find the first parent with a substantial border radius and background
-                    let current = inputDiv.parentElement;
-                    while (current && current !== document.body) {
-                        const style = window.getComputedStyle(current);
-                        if (parseInt(style.borderRadius) > 20 && style.backgroundColor !== 'rgba(0, 0, 0, 0)' && style.backgroundColor !== 'transparent') {
-                            container = current;
-                            break;
-                        }
-                        current = current.parentElement;
-                    }
-                }
-                
-                const targetElement = container || inputDiv;
-
-                if (targetElement.dataset.geminiInjected === 'true') {
-                    console.log('Gemini Prompt Injector: Already injected, skipping.');
+            let textToInject = promptText;
+            if (useServer) {
+                try {
+                    textToInject = await fetchFromLocalServer(port);
+                } catch (e) {
+                    console.error('Gemini Prompt Injector:', e.message);
                     return;
                 }
-                targetElement.dataset.geminiInjected = 'true';
+                if (!textToInject) {
+                    console.warn('Gemini Prompt Injector: empty response from server.');
+                    return;
+                }
+            }
 
-                // Apply the running lights effect
-                targetElement.classList.add('gemini-injector-active');
-                
-                // Remove the effect on blur or user interaction if desired, 
-                // but for now we keep it to highlight the injection. 
-                // Alternatively, remove it after a timeout.
-                setTimeout(() => {
-                    targetElement.classList.remove('gemini-injector-active');
-                }, animate_duration_ms); // Remove after 5 seconds
+            inputDiv.focus();
 
-                // Use execCommand to insert text to ensure it plays nice with the editor's internal state
-                // This is deprecated but often the most reliable way for rich text editors vs .innerText
-                // Alternatively, we can try to find the React/Angular/internal props if this fails
-                document.execCommand('insertText', false, promptText + '\n\n----------------\n\n');
+            // Find the main container (the rounded white box)
+            // We look for 'input-area-v2' specifically as identified, or fallback to walking up
+            let container = inputDiv.closest('input-area-v2');
 
-                console.log('Gemini Prompt Injector: Text injected.');
+            if (!container) {
+                // Fallback heuristic: find the first parent with a substantial border radius and background
+                let current = inputDiv.parentElement;
+                while (current && current !== document.body) {
+                    const style = window.getComputedStyle(current);
+                    if (parseInt(style.borderRadius) > 20 && style.backgroundColor !== 'rgba(0, 0, 0, 0)' && style.backgroundColor !== 'transparent') {
+                        container = current;
+                        break;
+                    }
+                    current = current.parentElement;
+                }
+            }
 
-                // Optional: clean URL
-                // const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
-                // window.history.replaceState({path: newUrl}, '', newUrl);
+            const targetElement = container || inputDiv;
 
-            }, 1000); // Slight delay to ensure editor initialization
+            if (targetElement.dataset.geminiInjected === 'true') {
+                console.log('Gemini Prompt Injector: Already injected, skipping.');
+                return;
+            }
+            targetElement.dataset.geminiInjected = 'true';
+
+            // Apply the running lights effect
+            targetElement.classList.add('gemini-injector-active');
+
+            setTimeout(() => {
+                targetElement.classList.remove('gemini-injector-active');
+            }, animate_duration_ms);
+
+            document.execCommand('insertText', false, textToInject + '\n\n----------------\n\n');
+
+            console.log('Gemini Prompt Injector: Text injected.');
         });
     }
 
