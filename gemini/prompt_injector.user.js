@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gemini Prompt Injector
 // @namespace    http://tampermonkey.net/
-// @version      0.8
+// @version      0.9
 // @description  Injects prompt from URL parameters or local HTTP server into Gemini input field
 // @author       mopip77
 // @match        https://gemini.google.com/app?*
@@ -67,18 +67,48 @@
             GM_xmlhttpRequest({
                 method: 'GET',
                 url: `http://127.0.0.1:${port}/`,
+                responseType: 'blob',
                 timeout: 3000,
                 onload: (response) => {
-                    if (response.responseText) {
-                        resolve(response.responseText);
+                    const contentType = (response.responseHeaders || '').split('\n')
+                        .find(h => h.toLowerCase().startsWith('content-type:'));
+                    const ct = contentType ? contentType.split(':')[1].trim().toLowerCase() : '';
+
+                    if (ct.startsWith('image/')) {
+                        if (response.response && response.response.size > 0) {
+                            resolve({ type: 'image', data: response.response });
+                        } else {
+                            reject(new Error('Empty image response from local server'));
+                        }
                     } else {
-                        reject(new Error('Empty response from local server'));
+                        // Text response: read blob as text
+                        const blob = response.response;
+                        if (!blob || blob.size === 0) {
+                            reject(new Error('Empty response from local server'));
+                            return;
+                        }
+                        const reader = new FileReader();
+                        reader.onload = () => resolve({ type: 'text', data: reader.result });
+                        reader.onerror = () => reject(new Error('Failed to read response as text'));
+                        reader.readAsText(blob);
                     }
                 },
                 onerror: () => reject(new Error('Cannot connect to local prompt server')),
                 ontimeout: () => reject(new Error('Local prompt server timed out'))
             });
         });
+    }
+
+    function injectImage(inputDiv, imageBlob) {
+        const file = new File([imageBlob], 'image.png', { type: imageBlob.type || 'image/png' });
+        const dataTransfer = new DataTransfer();
+        dataTransfer.items.add(file);
+        const pasteEvent = new ClipboardEvent('paste', {
+            bubbles: true,
+            cancelable: true,
+            clipboardData: dataTransfer
+        });
+        inputDiv.dispatchEvent(pasteEvent);
     }
 
     function injectPrompt() {
@@ -151,18 +181,21 @@
             // Need to wait a bit for the editor to be fully ready/interactive
             await new Promise(r => setTimeout(r, 1000));
 
-            let textToInject = promptText;
+            let result;
             if (useServer) {
                 try {
-                    textToInject = await fetchFromLocalServer(port);
+                    result = await fetchFromLocalServer(port);
                 } catch (e) {
                     console.error('Gemini Prompt Injector:', e.message);
                     return;
                 }
-                if (!textToInject) {
-                    console.warn('Gemini Prompt Injector: empty response from server.');
-                    return;
-                }
+            } else {
+                result = { type: 'text', data: promptText };
+            }
+
+            if (!result || !result.data) {
+                console.warn('Gemini Prompt Injector: empty response.');
+                return;
             }
 
             inputDiv.focus();
@@ -199,9 +232,13 @@
                 targetElement.classList.remove('gemini-injector-active');
             }, animate_duration_ms);
 
-            document.execCommand('insertText', false, textToInject + '\n\n----------------\n\n');
-
-            console.log('Gemini Prompt Injector: Text injected.');
+            if (result.type === 'image') {
+                injectImage(inputDiv, result.data);
+                console.log('Gemini Prompt Injector: Image injected.');
+            } else {
+                document.execCommand('insertText', false, result.data + '\n\n----------------\n\n');
+                console.log('Gemini Prompt Injector: Text injected.');
+            }
         });
     }
 
